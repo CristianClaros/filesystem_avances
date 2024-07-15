@@ -37,17 +37,74 @@ int ejecutar_opcion(int opcion){
 	switch(opcion){
 		case IO_FS_CREATE:
 				printf("Creando archivos\n");
+				char* nombre = malloc(50*sizeof(char));
+				printf("Ingrese un nombre de archivo: ");
+				scanf("%s", nombre);
+				fs_create(nombre);
 			break;
-
+		case IO_FS_DELETE:
+				printf("Borrando archivos\n");
+			break;
+		case IO_FS_TRUNCATE:
+				printf("Truncando archivos\n");
+			break;
+		case IO_FS_WRITE:
+				printf("Escribiendo archivos\n");
+			break;
+		case IO_FS_READ:
+				printf("Leyendo archivos\n");
+			break;
 		case VER_ARCHIVO:
 				printf("Archivos\n");
-				abrir_archivo(ruta_absoluta("bloques.dat"), (void*)ver_bloques);
+				abrir_archivos(ruta_absoluta("bloques.dat"), ruta_absoluta("bitmap.dat"));
 			break;
 		default:
 			printf("Opcion invalida\n");
 	}
 
 	return EXIT_SUCCESS;
+}
+
+int fs_create(char* nombre){
+	int bloque_libre;
+	char* bloque = (char*) malloc(50*sizeof(char));
+	char* tamanio = (char*) malloc(50*sizeof(char));
+
+	bloque_libre = primer_bloque_libre(ruta_absoluta("bitmap.dat"));
+	if(bloque_libre == -1){
+		printf("No se puede encontrar un bloque libre, debe compactar\n");
+	}
+	sprintf(bloque,"%i",bloque_libre);
+	sprintf(tamanio,"%i",0);
+
+	crear_metadata(ruta_absoluta(nombre), bloque, tamanio);
+
+	return EXIT_SUCCESS;
+}
+
+int primer_bloque_libre(char* ruta){
+	int bloque_libre = -1;
+
+	int fd;
+	struct stat buf;
+	char* buffer;
+	t_bitarray* bitmap;
+
+	fd = open(ruta, O_RDWR);
+	fstat(fd, &buf);
+	buffer = mmap(NULL, buf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	bitmap = bitarray_create_with_mode(buffer, buf.st_size, LSB_FIRST);
+	for(int i=0;i<bitmap->size;i++){
+		if(!bitarray_test_bit(bitmap, i)){
+			bitarray_set_bit(bitmap, i);
+			bloque_libre = i;
+			return bloque_libre;
+		}
+	}
+	msync(bitmap, bitmap->size, MS_SYNC);
+	munmap(bitmap, bitmap->size);
+
+	return bloque_libre;
 }
 
 void obtener_datos_filesystem(){
@@ -58,8 +115,6 @@ void obtener_datos_filesystem(){
 int obtener_archivo(char* ruta, void (*tipo_archivo)(int)){
 	if(access(ruta, F_OK) == -1){
 		crear_archivo(ruta, (*tipo_archivo));
-	}else{
-		printf("Archivo %s abierto correctamente!!!\n", ruta);
 	}
 
 	return EXIT_SUCCESS;
@@ -84,46 +139,73 @@ int crear_archivo(char* ruta, void (*tipo_Archivo)(int)){
 		return EXIT_FAILURE;
 	}else{
 		(*tipo_Archivo)(fd);
-
 		close(fd);
 	}
-	printf("Archivo %s creado correctamente!!!\n", ruta);
 
 	return EXIT_SUCCESS;
 }
 
-int abrir_archivo(char* ruta, void (*tipo_Archivo)(int)){
-	int fd;
+int abrir_archivos(char* ruta_bloque, char* ruta_bitmap){
+	int fd_bloque;
+	int fd_bitmap;
 
-	if((fd = open(ruta, O_RDWR|O_TRUNC)) == -1){
-		printf("No se pudo abrir el archivo!!!\n");
+	if(((fd_bloque = open(ruta_bloque, O_RDWR)) == -1) || ((fd_bitmap = open(ruta_bitmap, O_RDWR)) == -1)){
+		printf("No se pueden abrir los archivos!!!\n");
 		return EXIT_FAILURE;
 	}else{
-		(*tipo_Archivo)(fd);
-		close(fd);
+		struct stat buf_bloque;
+		struct stat buf_bitmap;
+
+		char* buffer_bloque;
+		char* buffer_bitmap;
+		t_bitarray* bitmap;
+
+		fstat(fd_bloque, &buf_bloque);
+		buffer_bloque = mmap(NULL, buf_bloque.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd_bloque, 0);
+
+		fstat(fd_bitmap, &buf_bitmap);
+		buffer_bitmap = mmap(NULL, buf_bitmap.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd_bitmap, 0);
+		bitmap = bitarray_create_with_mode(buffer_bitmap, buf_bitmap.st_size, LSB_FIRST);
+
+		int aux=0;
+
+		for(int i=0;i<bitmap->size;i++){
+			if(bitarray_test_bit(bitmap,i)){
+				printf("1\t");
+			}else{
+				printf("0\t");
+			}
+			for(int j=0;j<ceil(BLOCK_SIZE/8);j++){
+				printf("%c", buffer_bloque[j+aux]);
+			}
+			printf("\n");
+			aux+=ceil(BLOCK_SIZE/8);
+		}
+
+		close(fd_bloque);
+		close(fd_bitmap);
 	}
-	printf("Archivo %s abierto correctamente!!!\n", ruta);
 
 	return EXIT_SUCCESS;
-}
-
-void ver_bloques(int file_descriptor){
-	struct stat buf;
-
-	fstat(file_descriptor, &buf);
-	char* buffer = mmap(NULL, buf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_descriptor, 0);
-	for(int i=0;i<buf.st_size;i++){
-		if(i%8 == 0){
-			printf("\n");
-		}
-		printf("%c", buffer[i]);
-	}
 }
 
 void bloques(int file_descriptor){
 	int tamanio_archivo = BLOCK_COUNT * ceil(BLOCK_SIZE/8);
 
 	ftruncate(file_descriptor, tamanio_archivo);
+
+	char* buffer_bloques;
+	struct stat buf;
+
+	fstat(file_descriptor, &buf);
+	buffer_bloques = mmap(NULL, buf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_descriptor, 0);
+
+	for(int i=0;i<tamanio_archivo;i++){
+		strcat(buffer_bloques, "0");
+	}
+
+	msync(buffer_bloques, buf.st_size, MS_SYNC);
+	munmap(buffer_bloques, buf.st_size);
 }
 
 void bitmap(int file_descriptor){
@@ -139,9 +221,11 @@ void bitmap(int file_descriptor){
 	buffer_bitmap = mmap(NULL, buf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_descriptor, 0);
 	bitmap = bitarray_create_with_mode(buffer_bitmap, buf.st_size, LSB_FIRST);
 
-	for(int i=0;i<buf.st_size;i++){
+	for(int i=0;i<bitmap->size;i++){
 		bitarray_clean_bit(bitmap, i);
 	}
+	msync(bitmap, bitmap->size, MS_SYNC);
+	munmap(bitmap, bitmap->size);
 }
 
 int crear_metadata(char* ruta, char* bloque_inicial, char* tamanio_archivo){

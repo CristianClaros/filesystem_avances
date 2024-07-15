@@ -12,9 +12,7 @@ int obtener_archivo(char* ruta, void (*tipo_archivo)(int));
 char* ruta_absoluta(char* ruta_relativa);
 
 int crear_archivo(char* ruta, void (*tipo_Archivo)(int));
-int abrir_archivo(char* ruta, void (*tipo_Archivo)(int));
-
-void ver_bloques(int file_descriptor);
+int abrir_archivos(char* ruta_bloque, char* ruta_bitmap);
 
 void bitmap(int file_descriptor);
 void bloques(int file_descriptor);
@@ -22,6 +20,9 @@ void bloques(int file_descriptor);
 int agregar_archivo(char* archivo, char* archivos_abiertos);
 void mostrar_archivos(t_metadata* metadata);
 t_list* cargar_archivos(char* ruta);
+
+int primer_bloque_libre(char* ruta);
+int fs_create(char* nombre);
 
 void obtener_datos_filesystem();
 int menu();
