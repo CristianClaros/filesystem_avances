@@ -56,7 +56,7 @@ int ejecutar_opcion(int opcion){
 			break;
 		case VER_ARCHIVO:
 				printf("Archivos\n");
-				abrir_archivos(ruta_absoluta("bloques.dat"), ruta_absoluta("bitmap.dat"));
+				abrir_archivos(ruta_absoluta(ARCHIVO_BLOQUE), ruta_absoluta(ARCHIVO_BITMAP));
 			break;
 		default:
 			printf("Opcion invalida\n");
@@ -70,19 +70,41 @@ int fs_create(char* nombre){
 	char* bloque = (char*) malloc(50*sizeof(char));
 	char* tamanio = (char*) malloc(50*sizeof(char));
 
-	bloque_libre = primer_bloque_libre(ruta_absoluta("bitmap.dat"));
-	if(bloque_libre == -1){
+	if((bloque_libre = buscar_bloque_libre(ruta_absoluta(ARCHIVO_BITMAP), BLOQUE_UNITARIO)) == -1){
 		printf("No se puede encontrar un bloque libre, debe compactar\n");
 	}
+
+	asignar_bloque_libre(ruta_absoluta(ARCHIVO_BITMAP), bloque_libre, BLOQUE_UNITARIO);
 	sprintf(bloque,"%i",bloque_libre);
-	sprintf(tamanio,"%i",0);
+	sprintf(tamanio,"%i",TAMANIO_VACIO);
 
 	crear_metadata(ruta_absoluta(nombre), bloque, tamanio);
 
 	return EXIT_SUCCESS;
 }
 
-int primer_bloque_libre(char* ruta){
+int asignar_bloque_libre(char* ruta,int bloque_libre, int longitud){
+	int fd;
+	struct stat buf;
+	char* buffer;
+	t_bitarray* bitmap;
+
+	fd = open(ruta, O_RDWR);
+	fstat(fd, &buf);
+	buffer = mmap(NULL, buf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	bitmap = bitarray_create_with_mode(buffer, buf.st_size, LSB_FIRST);
+
+	for(int i = bloque_libre;i<longitud;i++){
+		bitarray_set_bit(bitmap, i);
+	}
+
+	msync(bitmap, bitmap->size, MS_SYNC);
+	munmap(bitmap, bitmap->size);
+
+	return EXIT_SUCCESS;
+}
+
+int buscar_bloque_libre(char* ruta, int longitud){
 	int bloque_libre = -1;
 
 	int fd;
@@ -94,13 +116,25 @@ int primer_bloque_libre(char* ruta){
 	fstat(fd, &buf);
 	buffer = mmap(NULL, buf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	bitmap = bitarray_create_with_mode(buffer, buf.st_size, LSB_FIRST);
+
+	int n_bloque = -1; //Si devuelve este valor, no hay lugar libre para ese tamaño
+	int flag = 0; // 0  es false, 1 es true
+	int contador_espacios = 0;
 	for(int i=0;i<bitmap->size;i++){
 		if(!bitarray_test_bit(bitmap, i)){
-			bitarray_set_bit(bitmap, i);
-			bloque_libre = i;
-			return bloque_libre;
+			if(flag == 0){
+				n_bloque = i;
+				flag = 1;
+			}
+			contador_espacios++;
+			if(contador_espacios == longitud){
+				return n_bloque;
+			}
 		}
+		n_bloque = -1;
+		flag = 0;
 	}
+
 	msync(bitmap, bitmap->size, MS_SYNC);
 	munmap(bitmap, bitmap->size);
 
@@ -108,8 +142,8 @@ int primer_bloque_libre(char* ruta){
 }
 
 void obtener_datos_filesystem(){
-	obtener_archivo(ruta_absoluta("bloques.dat"), (void*) bloques);
-	obtener_archivo(ruta_absoluta("bitmap.dat"), (void*) bitmap);
+	obtener_archivo(ruta_absoluta(ARCHIVO_BLOQUE), (void*) bloques);
+	obtener_archivo(ruta_absoluta(ARCHIVO_BITMAP), (void*) bitmap);
 }
 
 int obtener_archivo(char* ruta, void (*tipo_archivo)(int)){
@@ -266,6 +300,22 @@ int modificar_metadata(char* ruta, char* bloque_inicial, char* tamanio_archivo){
 	config_save(config);
 
 	config_destroy(config);
+
+	return EXIT_SUCCESS;
+}
+
+t_metadata* datos_metadata(char* ruta){
+	t_metadata* metadata = malloc(sizeof(t_metadata));
+	t_config* config = config_create(ruta);
+
+	metadata->bloque_inicial = config_get_int_value(config, "BLOQUE_INICIAL");
+	metadata->tamanio_archivo = config_get_int_value(config, "TAMANIO_ARCHIVO");
+
+	config_destroy(config);
+	return metadata;
+}
+
+int eliminar_metadata(char* archivo){
 
 	return EXIT_SUCCESS;
 }

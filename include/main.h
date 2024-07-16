@@ -21,8 +21,10 @@ int agregar_archivo(char* archivo, char* archivos_abiertos);
 void mostrar_archivos(t_metadata* metadata);
 t_list* cargar_archivos(char* ruta);
 
-int primer_bloque_libre(char* ruta);
 int fs_create(char* nombre);
+
+int buscar_bloque_libre(char* ruta, int longitud);
+int asignar_bloque_libre(char* ruta,int bloque_libre, int longitud);
 
 void obtener_datos_filesystem();
 int menu();

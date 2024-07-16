@@ -15,11 +15,17 @@
 #include <commons/collections/list.h>
 
 
+#define BLOQUE_UNITARIO 1
+#define TAMANIO_VACIO 0
+
 #define TIEMPO_UNIDAD_TRABAJO 250
 #define BLOCK_SIZE 64
 #define BLOCK_COUNT 1024
 #define RETRASO_COMPACTACION 50000
 #define PATH_BASE_DIALFS "/home/utnso/dialfs"
+
+#define ARCHIVO_BITMAP "bitmap.dat"
+#define ARCHIVO_BLOQUE "bloques.dat"
 
 typedef enum{
 	EXIT = 0,

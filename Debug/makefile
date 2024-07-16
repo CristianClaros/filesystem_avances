@@ -23,7 +23,7 @@ $(wildcard ../makefile.init) \
 $(wildcard ../makefile.targets) \
 
 
-BUILD_ARTIFACT_NAME := filesystem_avances
+BUILD_ARTIFACT_NAME := filesystem
 BUILD_ARTIFACT_EXTENSION :=
 BUILD_ARTIFACT_PREFIX :=
 BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ARTIFACT_EXTENSION),.$(BUILD_ARTIFACT_EXTENSION),)
@@ -34,19 +34,19 @@ BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ART
 all: main-build
 
 # Main-build Target
-main-build: filesystem_avances
+main-build: filesystem
 
 # Tool invocations
-filesystem_avances: $(OBJS) $(USER_OBJS) makefile $(OPTIONAL_TOOL_DEPS)
+filesystem: $(OBJS) $(USER_OBJS) makefile $(OPTIONAL_TOOL_DEPS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	gcc  -o "filesystem_avances" $(OBJS) $(USER_OBJS) $(LIBS) -lcommons
+	gcc  -o "filesystem" $(OBJS) $(USER_OBJS) $(LIBS) -lcommons
 	@echo 'Finished building target: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) filesystem_avances
+	-$(RM) filesystem
 	-@echo ' '
 
 .PHONY: all clean dependents main-build
