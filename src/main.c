@@ -33,23 +33,37 @@ int menu(){
 }
 
 int ejecutar_opcion(int opcion){
-
+	char* nombre_archivo = malloc(50*sizeof(char));
 	switch(opcion){
 		case IO_FS_CREATE:
 				printf("Creando archivos\n");
-				char* nombre = malloc(50*sizeof(char));
-				printf("Ingrese un nombre de archivo: ");
-				scanf("%s", nombre);
-				fs_create(nombre);
+				printf("Ingrese un nombre de archivo a crear: ");
+				scanf("%s", nombre_archivo);
+//				nombre_archivo = recibir_string(buffer);
+				fs_create(ruta_absoluta(nombre_archivo));
 			break;
 		case IO_FS_DELETE:
 				printf("Borrando archivos\n");
+				printf("Ingrese un nombre de archivo a borrar: ");
+				scanf("%s", nombre_archivo);
+				//nombre_archivo = recibir_string(buffer);
+				fs_delete(ruta_absoluta(nombre_archivo));
 			break;
 		case IO_FS_TRUNCATE:
 				printf("Truncando archivos\n");
 			break;
 		case IO_FS_WRITE:
 				printf("Escribiendo archivos\n");
+				printf("Ingrese un nombre de archivo a Escribir: ");
+				scanf("%s", nombre_archivo);
+				//nombre_archivo = recibir_string(buffer);
+				//registro_direccion = recibir_int(buffer);
+				//registro_tamanio = recibir_int(buffer);
+				//registro_puntero = recibir_int(buffer);
+				int registro_direccion = 8;
+				int registro_tamanio = 50;
+				int registro_puntero = 0;
+				fs_write(ruta_absoluta(nombre_archivo), registro_direccion, registro_tamanio, registro_puntero);
 			break;
 		case IO_FS_READ:
 				printf("Leyendo archivos\n");
@@ -78,7 +92,58 @@ int fs_create(char* nombre){
 	sprintf(bloque,"%i",bloque_libre);
 	sprintf(tamanio,"%i",TAMANIO_VACIO);
 
-	crear_metadata(ruta_absoluta(nombre), bloque, tamanio);
+	crear_metadata(nombre, bloque, tamanio);
+
+	return EXIT_SUCCESS;
+}
+
+int fs_delete(char* archivo_metadata){
+	t_metadata* metadata = datos_metadata(archivo_metadata);
+	int cantidad_bloques = ceil(metadata->tamanio_archivo/8)+1; //El +1 es porque supongo que el tamanio es 0(cero), pero debo poner un if abajo
+	printf("TAMANIO(%i)\n", cantidad_bloques);
+
+	remover_bloque_bitmap(ruta_absoluta(ARCHIVO_BITMAP), metadata->bloque_inicial, cantidad_bloques);
+	//Aqui debo borrar datos del bloques.dat
+
+	remove(archivo_metadata);
+	free(metadata);
+
+	return EXIT_SUCCESS;
+}
+
+int fs_write(char* ruta, int registro_direccion, int registro_tamanio, int registro_puntero){
+	//Pedir a memoria que me devuelva la cantidad de registro_tamanio bytes en registro_direccion
+	int tamanio_auxiliar;
+	int bloque_cantidad;
+	int nuevo_bloque_cantidad;
+	t_metadata* metadata = datos_metadata(ruta);
+	tamanio_auxiliar = metadata->tamanio_archivo;
+	metadata->tamanio_archivo += registro_tamanio;
+	nuevo_bloque_cantidad = ceil(metadata->tamanio_archivo/8);
+	//Solo es para que me de un bloque con archivo tamanio 0(cero)
+	if(tamanio_auxiliar == 0){
+		tamanio_auxiliar = 1;
+	}
+	bloque_cantidad = ceil(tamanio_auxiliar/8);
+	printf("BLOQUE(%i)", bloque_cantidad);
+
+	char* bloque_string = malloc(50*sizeof(char));
+	char* tamanio_string = malloc(50*sizeof(char));
+	sprintf(tamanio_string, "%i", metadata->tamanio_archivo);
+	if(nuevo_bloque_cantidad > bloque_cantidad){
+		//si estas ocpuados busco nuevo espacio
+		//supongo que el bit continuo esta ocupado
+		int nuevo_bloque = buscar_bloque_libre(ruta_absoluta(ARCHIVO_BITMAP), nuevo_bloque_cantidad);
+		asignar_bloque_libre(ruta_absoluta(ARCHIVO_BITMAP), nuevo_bloque, nuevo_bloque_cantidad);
+		remover_bloque_bitmap(ruta_absoluta(ARCHIVO_BITMAP), metadata->bloque_inicial, bloque_cantidad);
+
+		sprintf(bloque_string, "%i", nuevo_bloque);
+		modificar_metadata(ruta, bloque_string, tamanio_string);
+	}else{
+		sprintf(bloque_string, "%i", metadata->bloque_inicial);
+		modificar_metadata(ruta, bloque_string, tamanio_string);
+	}
+	free(metadata);
 
 	return EXIT_SUCCESS;
 }
@@ -94,8 +159,29 @@ int asignar_bloque_libre(char* ruta,int bloque_libre, int longitud){
 	buffer = mmap(NULL, buf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	bitmap = bitarray_create_with_mode(buffer, buf.st_size, LSB_FIRST);
 
-	for(int i = bloque_libre;i<longitud;i++){
+	for(int i = bloque_libre;i<(bloque_libre+longitud);i++){
 		bitarray_set_bit(bitmap, i);
+	}
+
+	msync(bitmap, bitmap->size, MS_SYNC);
+	munmap(bitmap, bitmap->size);
+
+	return EXIT_SUCCESS;
+}
+
+int remover_bloque_bitmap(char* ruta,int bloque_inicial, int longitud){
+	int fd;
+	struct stat buf;
+	char* buffer;
+	t_bitarray* bitmap;
+
+	fd = open(ruta, O_RDWR);
+	fstat(fd, &buf);
+	buffer = mmap(NULL, buf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	bitmap = bitarray_create_with_mode(buffer, buf.st_size, LSB_FIRST);
+
+	for(int i = bloque_inicial;i<(bloque_inicial+longitud);i++){
+		bitarray_clean_bit(bitmap, i);
 	}
 
 	msync(bitmap, bitmap->size, MS_SYNC);
@@ -313,11 +399,6 @@ t_metadata* datos_metadata(char* ruta){
 
 	config_destroy(config);
 	return metadata;
-}
-
-int eliminar_metadata(char* archivo){
-
-	return EXIT_SUCCESS;
 }
 
 //Funciones que no son necesarios solo para simular Kernel
