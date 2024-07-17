@@ -3,8 +3,8 @@
 
 #include "gestor.h"
 
-int crear_metadata(char* ruta, char* bloque_inicial, char* tamanio_archivo);
-int modificar_metadata(char* ruta, char* bloque_inicial, char* tamanio_archivo);
+int crear_metadata(char* ruta, int bloque_inicial, int tamanio_archivo);
+int modificar_metadata(char* ruta, int bloque_inicial, int tamanio_archivo);
 int cargar_metadata(char* ruta, t_metadata* metadata);
 t_metadata* datos_metadata(char* ruta);
 
@@ -22,8 +22,8 @@ int agregar_archivo(char* archivo, char* archivos_abiertos);
 void mostrar_archivos(t_metadata* metadata);
 t_list* cargar_archivos(char* ruta);
 
-int buscar_bloque_libre(char* ruta, int longitud);
-int asignar_bloque_libre(char* ruta,int bloque_libre, int longitud);
+int buscar_bloque_bitmap(char* ruta, int longitud);
+int asignar_bloque_bitmap(char* ruta,int bloque_libre, int longitud);
 int remover_bloque_bitmap(char* ruta,int bloque_inicial, int longitud);
 
 int fs_create(char* nombre);
