@@ -28,10 +28,12 @@ int remover_bloque_bitmap(char* ruta,int bloque_inicial, int longitud);
 
 int fs_create(char* nombre);
 int fs_delete(char* archivo_metadata);
+int fs_truncate(char* ruta, int registro_tamanio);
 int fs_write(char* ruta, int registro_direccion, int registro_tamanio, int registro_puntero);
 
 void obtener_datos_filesystem();
 int menu();
 int ejecutar_opcion(int opcion);
+int cantidad_bloques(int tamanio);
 
 #endif /* INCLUDE_MAIN_H_ */

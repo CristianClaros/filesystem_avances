@@ -14,10 +14,6 @@
 #include <commons/config.h>
 #include <commons/collections/list.h>
 
-
-#define BLOQUE_UNITARIO 1
-#define TAMANIO_VACIO 0
-
 #define TIEMPO_UNIDAD_TRABAJO 250
 #define BLOCK_SIZE 64
 #define BLOCK_COUNT 1024
