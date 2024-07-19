@@ -13,6 +13,8 @@
 #include <sys/mman.h>
 #include <commons/config.h>
 #include <commons/collections/list.h>
+#include <dirent.h>
+#include <stdbool.h>
 
 #define TIEMPO_UNIDAD_TRABAJO 250
 #define BLOCK_SIZE 64
@@ -30,7 +32,9 @@ typedef enum{
 	IO_FS_TRUNCATE,
 	IO_FS_WRITE,
 	IO_FS_READ,
-	VER_ARCHIVO
+	VER_ARCHIVO,
+	MOSTRAR_ARCHIVOS_DIRECTORIO,
+	COMPACTAR
 }t_opcion;
 
 typedef struct{

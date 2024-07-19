@@ -16,6 +16,13 @@ int crear_archivo(char* ruta, void (*tipo_Archivo)(int));
 int abrir_archivo(char* ruta, void (*tipo_Archivo)(int));
 int abrir_archivos();
 
+t_list* cargar_archivos(char* ruta);
+bool comparar_bloque_inicial(t_metadata* metadata_lista, t_metadata* metadata);
+int mostrar_archivos(char* ruta_directorio);
+void mostrar_lista_archivos(t_metadata* metadata);
+
+int compactar();
+
 void crear_bitmap(int file_descriptor);
 void crear_bloques(int file_descriptor);
 

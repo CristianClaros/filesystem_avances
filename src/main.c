@@ -26,7 +26,9 @@ int menu(){
 	printf("3 - IO_FS_TRUNCATE\n");
 	printf("4 - IO_FS_WRITE\n");
 	printf("5 - IO_FS_READ\n");
-	printf("6 - VER ARCHIVOS\n");
+	printf("6 - VER ARCHIVOS(BITMAP, BLOQUES\n");
+	printf("7 - MOSTRAR ARCHIVOS\n");
+	printf("8 - COMPACTAR\n");
 	printf("Opcion: ");
 
 	return EXIT_SUCCESS;
@@ -75,6 +77,14 @@ int ejecutar_opcion(int opcion){
 		case VER_ARCHIVO:
 				printf("Archivos\n");
 				abrir_archivos(ARCHIVO_BLOQUE, ARCHIVO_BITMAP);
+			break;
+		case MOSTRAR_ARCHIVOS_DIRECTORIO:
+				printf("Archivos\n");
+				mostrar_archivos(PATH_BASE_DIALFS);
+			break;
+		case COMPACTAR:
+				printf("Compactar\n");
+				compactar();
 			break;
 		default:
 			printf("Opcion invalida\n");
@@ -404,6 +414,72 @@ int abrir_archivos(){
 		}
 
 	return EXIT_SUCCESS;
+}
+
+t_list* cargar_archivos(char* ruta_directorio){
+	t_list* lista_archivos = list_create();
+	DIR *dir = opendir(ruta_directorio);
+	if(!dir){
+		perror("opendir");
+		return NULL;
+	}
+
+	struct dirent *ent;
+	while((ent = readdir(dir))){
+		//Muestra todos los archivos menos bloques.dat y bitmap.dat
+		if(strlen(ent->d_name) > 4 && strcmp(ent->d_name + strlen(ent->d_name)-4,".txt") == 0){
+			t_metadata* metadata = datos_metadata(ent->d_name);
+			metadata->nombre = malloc(strlen(ent->d_name)*sizeof(char));
+			strcpy(metadata->nombre, ent->d_name);
+
+			list_add_sorted(lista_archivos, metadata, (void*) comparar_bloque_inicial);
+		}
+	}
+	closedir(dir);
+
+	return lista_archivos;
+}
+
+bool comparar_bloque_inicial(t_metadata* metadata_lista, t_metadata* metadata){
+	return metadata_lista->bloque_inicial < metadata->bloque_inicial;
+}
+
+int mostrar_archivos(char* ruta_directorio){
+	t_list* lista_archivos = cargar_archivos(ruta_directorio);
+
+	list_iterate(lista_archivos, (void*) mostrar_lista_archivos);
+
+	return EXIT_SUCCESS;
+}
+
+int compactar(){
+	t_list* lista_archivos = cargar_archivos(PATH_BASE_DIALFS);
+
+	//Aca debe limpiar todo el bufffer, es mas facil?
+	for(int i=0;i<buffer_bitmap->size;i++){
+		bitarray_clean_bit(buffer_bitmap, i);
+		msync(buffer_bitmap, buffer_bitmap->size, MS_SYNC);
+	}
+
+	int contador_posicion = 0;
+	for(int i=0;i<list_size(lista_archivos);i++){
+		t_metadata* metadata = (t_metadata*) list_get(lista_archivos, i); //Agarra el primer elemento de la lista
+		int nuevo_bloque_inicial = contador_posicion;
+
+		for(int j=contador_posicion; j<(contador_posicion + cantidad_bloques(metadata->tamanio_archivo));j++){
+			bitarray_set_bit(buffer_bitmap, j);
+			msync(buffer_bitmap, buffer_bitmap->size, MS_SYNC);
+		}
+		contador_posicion += cantidad_bloques(metadata->tamanio_archivo);
+
+		modificar_metadata(metadata->nombre, nuevo_bloque_inicial, metadata->tamanio_archivo);
+	}
+
+	return EXIT_SUCCESS;
+}
+
+void mostrar_lista_archivos(t_metadata* metadata){
+	printf("Nombre_archivo: %s - Bloque_inicial: %i\n", metadata->nombre, metadata->bloque_inicial);
 }
 
 int crear_metadata(char* ruta, int bloque_inicial, int tamanio_archivo){
