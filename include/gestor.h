@@ -39,6 +39,7 @@ typedef struct{
 	int tamanio_archivo;
 }t_metadata;
 
-
+extern char* buffer_bloques;
+extern t_bitarray* buffer_bitmap;
 
 #endif /* INCLUDE_GESTOR_H_ */

@@ -8,23 +8,23 @@ int modificar_metadata(char* ruta, int bloque_inicial, int tamanio_archivo);
 int cargar_metadata(char* ruta, t_metadata* metadata);
 t_metadata* datos_metadata(char* ruta);
 
-int obtener_archivo(char* ruta, void (*tipo_archivo)(int));
+int obtener_archivo(char* ruta, void (*tipo_creacion)(int), void (*tipo_apertura)(int));
 
 char* ruta_absoluta(char* ruta_relativa);
 
 int crear_archivo(char* ruta, void (*tipo_Archivo)(int));
-int abrir_archivos(char* ruta_bloque, char* ruta_bitmap);
+int abrir_archivo(char* ruta, void (*tipo_Archivo)(int));
+int abrir_archivos();
 
-void bitmap(int file_descriptor);
-void bloques(int file_descriptor);
+void crear_bitmap(int file_descriptor);
+void crear_bloques(int file_descriptor);
 
-int agregar_archivo(char* archivo, char* archivos_abiertos);
-void mostrar_archivos(t_metadata* metadata);
-t_list* cargar_archivos(char* ruta);
+void abrir_bitmap(int file_descriptor);
+void abrir_bloques(int file_descriptor);
 
-int buscar_bloque_bitmap(char* ruta, int longitud);
-int asignar_bloque_bitmap(char* ruta,int bloque_libre, int longitud);
-int remover_bloque_bitmap(char* ruta,int bloque_inicial, int longitud);
+int buscar_bloque_bitmap(int longitud);
+int asignar_bloque_bitmap(int bloque_libre, int longitud);
+int remover_bloque_bitmap(int bloque_inicial, int longitud);
 
 int fs_create(char* nombre);
 int fs_delete(char* archivo_metadata);
