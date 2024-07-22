@@ -158,7 +158,6 @@ int fs_truncate(char* ruta, int registro_tamanio){
 	int diferencia_bloques = cantidad_nueva_bloques - cantidad_bloques_actual;
 
 	int ultimo_bloque = cantidad_bloques_actual + metadata->bloque_inicial - 1;
-
 	if(diferencia_bloques > 0){ //Quiere decir que el archivo se va a expandir
 		int nuevo_bloque;
 		if((nuevo_bloque = buscar_bloque_bitmap(diferencia_bloques)) == -1){
@@ -272,7 +271,7 @@ int fs_write(char* ruta, int registro_direccion, int registro_tamanio, int regis
 				//limpio el espacio donde me encontraba
 				remover_bloque_bitmap(metadata->bloque_inicial, cantidad_anterior_bloques);
 
-				modificar_metadata(ruta, nuevo_bloque, metadata->tamanio_archivo);
+				modificar_metadata(ruta, nuevo_bloque, metadata->tamanio_archivo+registro_puntero+registro_tamanio);
 			}
 		}else{
 			if((nuevo_bloque - ultimo_bloque) == 1){
@@ -280,10 +279,10 @@ int fs_write(char* ruta, int registro_direccion, int registro_tamanio, int regis
 				//Quiere decir que los bloques son continguos y debo agregarle al archivo los datos
 				escribir_datos_bloque(datos, inicio_bloque(metadata->bloque_inicial) + registro_puntero, registro_tamanio);
 
-				modificar_metadata(ruta, metadata->bloque_inicial, metadata->tamanio_archivo);
+				modificar_metadata(ruta, metadata->bloque_inicial, metadata->tamanio_archivo+registro_puntero+registro_tamanio);
 			}
 			else{
-				printf("No hay espacio suficiente, para bloques contiguos");
+				printf("No hay espacio suficiente, para bloques contiguos\n");
 
 				compactar();
 				metadata = datos_metadata(ruta);
@@ -294,13 +293,13 @@ int fs_write(char* ruta, int registro_direccion, int registro_tamanio, int regis
 					printf("No hay espacio en memoria!!! debe esperar que se libere la memoria!!!");
 					return EXIT_FAILURE;
 				}else{
-					asignar_bloque_bitmap(nuevo_bloque, cantidad_bloques(metadata->tamanio_archivo));
+					asignar_bloque_bitmap(nuevo_bloque, cantidad_bloques(metadata->tamanio_archivo) + cantidad_extra_bloques);
 					//Debo mover lo del bloque anterior al nuevo bloque y luego agregarle los nuevos datos
 					escribir_datos_bloque(buffer_bloques + inicio_bloque(metadata->bloque_inicial), inicio_bloque(nuevo_bloque), anterior_tamanio);
 					escribir_datos_bloque(datos, inicio_bloque(nuevo_bloque) + registro_puntero, registro_tamanio);
 					//Debo limpiar el lugar donde estaba antes
 					remover_bloque_bitmap(metadata->bloque_inicial, cantidad_anterior_bloques);
-					modificar_metadata(ruta, nuevo_bloque, metadata->tamanio_archivo);
+					modificar_metadata(ruta, nuevo_bloque, metadata->tamanio_archivo+registro_puntero+registro_tamanio);
 				}
 			}
 		}
@@ -517,7 +516,6 @@ int remover_bloque_bitmap(int bloque_inicial, int longitud){
 	for(int i = bloque_inicial;i<(bloque_inicial+longitud);i++){
 		bitarray_clean_bit(buffer_bitmap, i);
 	}
-
 	msync(buffer_bitmap, buffer_bitmap->size, MS_SYNC);
 
 	return EXIT_SUCCESS;
@@ -601,11 +599,8 @@ t_metadata* datos_metadata(char* ruta){
 int compactar(){
 	t_list* lista_archivos = cargar_archivos(PATH_BASE_DIALFS);
 
-	//Aca debe limpiar todo el bufffer, es mas facil?
-	for(int i=0;i<buffer_bitmap->size;i++){
-		bitarray_clean_bit(buffer_bitmap, i);
-	}
-	msync(buffer_bitmap, buffer_bitmap->size, MS_SYNC);
+	//Aca debe limpiar todo el buffer del bitmap
+	remover_bloque_bitmap(0, buffer_bitmap->size);
 
 	int contador_posicion = 0;
 	for(int i=0;i<list_size(lista_archivos);i++){
@@ -613,14 +608,10 @@ int compactar(){
 		int nuevo_bloque_inicial = contador_posicion;
 
 		//Muevo todos los datos del bloque al nuevo bloque
-		if(metadata->bloque_inicial != 0){
+		if(metadata->bloque_inicial != contador_posicion){
 			escribir_datos_bloque(buffer_bloques + inicio_bloque(metadata->bloque_inicial), nuevo_bloque_inicial, metadata->tamanio_archivo);
 		}
-
-		for(int j=contador_posicion; j<(contador_posicion + cantidad_bloques(metadata->tamanio_archivo));j++){
-			bitarray_set_bit(buffer_bitmap, j);
-		}
-		msync(buffer_bitmap, buffer_bitmap->size, MS_SYNC);
+		asignar_bloque_bitmap(contador_posicion, cantidad_bloques(metadata->tamanio_archivo)); //Aca voy seteando el bitmap con los datos del archivo
 
 		contador_posicion += cantidad_bloques(metadata->tamanio_archivo);
 
