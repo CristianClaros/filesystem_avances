@@ -15,15 +15,19 @@
 #include <commons/collections/list.h>
 #include <dirent.h>
 #include <stdbool.h>
+#include <memory.h>
+
+#define TAMANIO_MEMORIA 4096
 
 #define TIEMPO_UNIDAD_TRABAJO 250
 #define BLOCK_SIZE 64
-#define BLOCK_COUNT 1024
+#define BLOCK_COUNT 8//1024
 #define RETRASO_COMPACTACION 50000
 #define PATH_BASE_DIALFS "/home/utnso/dialfs"
 
 #define ARCHIVO_BITMAP "bitmap.dat"
 #define ARCHIVO_BLOQUE "bloques.dat"
+#define MEMORIA "memoria.dat"
 
 typedef enum{
 	EXIT = 0,
@@ -34,7 +38,8 @@ typedef enum{
 	IO_FS_READ,
 	VER_ARCHIVO,
 	MOSTRAR_ARCHIVOS_DIRECTORIO,
-	COMPACTAR
+	COMPACTAR,
+	DATOS_MEMORIA
 }t_opcion;
 
 typedef struct{
@@ -45,5 +50,6 @@ typedef struct{
 
 extern char* buffer_bloques;
 extern t_bitarray* buffer_bitmap;
+extern char* memoria;
 
 #endif /* INCLUDE_GESTOR_H_ */

@@ -28,19 +28,27 @@ void crear_bloques(int file_descriptor);
 
 void abrir_bitmap(int file_descriptor);
 void abrir_bloques(int file_descriptor);
+char* datos_memoria(int registro_direccion, int registro_tamanio);
 
 int buscar_bloque_bitmap(int longitud);
 int asignar_bloque_bitmap(int bloque_libre, int longitud);
 int remover_bloque_bitmap(int bloque_inicial, int longitud);
+int remover_datos_bloque(int posicion_inicial, int cantidad);
+int escribir_datos_bloque(char* buffer, int posicion_inicial, int cantidad);
 
 int fs_create(char* nombre);
 int fs_delete(char* archivo_metadata);
 int fs_truncate(char* ruta, int registro_tamanio);
 int fs_write(char* ruta, int registro_direccion, int registro_tamanio, int registro_puntero);
+int fs_read(char* ruta, int registro_direccion, int registro_tamanio, int registro_puntero);
 
 void obtener_datos_filesystem();
 int menu();
 int ejecutar_opcion(int opcion);
 int cantidad_bloques(int tamanio);
+int inicio_bloque(int n_bloque);
+
+void crear_memoria(int file_descriptor);
+void abrir_memoria(int file_descriptor);
 
 #endif /* INCLUDE_MAIN_H_ */
