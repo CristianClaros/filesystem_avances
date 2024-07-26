@@ -21,7 +21,7 @@ bool comparar_bloque_inicial(t_metadata* metadata_lista, t_metadata* metadata);
 int mostrar_archivos(char* ruta_directorio);
 void mostrar_lista_archivos(t_metadata* metadata);
 
-int compactar();
+int compactar(int pid);
 
 void crear_bitmap(int file_descriptor);
 void crear_bloques(int file_descriptor);

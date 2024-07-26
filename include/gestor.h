@@ -25,10 +25,6 @@
 #define RETRASO_COMPACTACION 50000
 #define PATH_BASE_DIALFS "/home/utnso/dialfs"
 
-#define ARCHIVO_BITMAP "bitmap.dat"
-#define ARCHIVO_BLOQUE "bloques.dat"
-#define MEMORIA "memoria.dat"
-
 typedef enum{
 	EXIT = 0,
 	IO_FS_CREATE,

@@ -15,6 +15,13 @@ int main(){
 
 	}while(opcion != EXIT);
 
+	//Limpia datos
+	munmap(buffer_bloques, strlen(buffer_bloques)+1);
+	munmap(buffer_bitmap, buffer_bitmap->size);
+	munmap(memoria, strlen(memoria)+1);
+
+
+
 	return EXIT_SUCCESS;
 }
 
@@ -90,7 +97,7 @@ int ejecutar_opcion(int opcion){
 			break;
 		case VER_ARCHIVO:
 				printf("Archivos\n");
-				abrir_archivos(ARCHIVO_BLOQUE, ARCHIVO_BITMAP);
+				abrir_archivos("bloques.dat", "bitmap.dat");
 			break;
 		case MOSTRAR_ARCHIVOS_DIRECTORIO:
 				printf("Archivos\n");
@@ -98,7 +105,7 @@ int ejecutar_opcion(int opcion){
 			break;
 		case COMPACTAR:
 				printf("Compactar\n");
-				compactar();
+				compactar(0);
 			break;
 		case	DATOS_MEMORIA:
 				printf("Datos memoria\n");
@@ -110,10 +117,16 @@ int ejecutar_opcion(int opcion){
 				scanf("%i", &registro_puntero);
 				char* datos = datos_memoria(registro_direccion, registro_tamanio);
 				printf("Datos: (%s)", datos);
+
+				free(datos);
 			break;
+		case 15:
+			return EXIT_SUCCESS;
 		default:
 			printf("Opcion invalida\n");
 	}
+
+	free(nombre_archivo);
 
 	return EXIT_SUCCESS;
 }
@@ -141,8 +154,11 @@ int fs_delete(char* archivo_metadata){
 	//Aqui debo borrar datos del bloques.dat
 	remover_datos_bloque(inicio_bloque(metadata->bloque_inicial), metadata->tamanio_archivo);
 
-	remove(ruta_absoluta(archivo_metadata));
+	char* ruta_archivo = ruta_absoluta(archivo_metadata);
+	remove(ruta_archivo);
+
 	free(metadata);
+	free(ruta_archivo);
 
 	return EXIT_SUCCESS;
 }
@@ -163,24 +179,29 @@ int fs_truncate(char* ruta, int registro_tamanio){
 		if((nuevo_bloque = buscar_bloque_bitmap(diferencia_bloques)) == -1){
 			printf("No hay espacio libre para expandir el archivo, debe compactar el archivo!!!\n");
 
-			compactar();
-			metadata = datos_metadata(ruta);
-			ultimo_bloque = cantidad_bloques_actual + metadata->bloque_inicial - 1;
+			compactar(1);
+
+			free(metadata);
+
+			t_metadata* metadata_compactacion_1 = datos_metadata(ruta);
+			ultimo_bloque = cantidad_bloques_actual + metadata_compactacion_1->bloque_inicial - 1;
 
 			//Como compacto busco un nuevo lugar
 			if((nuevo_bloque = buscar_bloque_bitmap(cantidad_bloques(cantidad_nueva_bloques))) == -1){
 				printf("No hay espacio en memoria!!! debe esperar que se libere la memoria\n!!!");
+				free(metadata_compactacion_1);
 				return EXIT_FAILURE;
 			}else{
 				printf("Copiando todos los datos al nuevo lugar\n");
 				asignar_bloque_bitmap(nuevo_bloque, cantidad_bloques(nuevo_tamanio));
 				//Primero copio lo que estaba en los bloques anteriores al inicio del nuevo bloque
-				escribir_datos_bloque(buffer_bloques + inicio_bloque(metadata->bloque_inicial), inicio_bloque(nuevo_bloque), metadata->tamanio_archivo);
+				escribir_datos_bloque(buffer_bloques + inicio_bloque(metadata_compactacion_1->bloque_inicial), inicio_bloque(nuevo_bloque), metadata_compactacion_1->tamanio_archivo);
 				//Ahora limpio el espacio donde estaba el bloque antes
-				remover_datos_bloque(inicio_bloque(metadata->bloque_inicial), tamanio_anterior);
-				remover_bloque_bitmap(metadata->bloque_inicial, cantidad_bloques_actual);
+				remover_datos_bloque(inicio_bloque(metadata_compactacion_1->bloque_inicial), tamanio_anterior);
+				remover_bloque_bitmap(metadata_compactacion_1->bloque_inicial, cantidad_bloques_actual);
 
 				modificar_metadata(ruta, nuevo_bloque, nuevo_tamanio);
+				free(metadata_compactacion_1);
 			}
 		}else{
 			if((nuevo_bloque - ultimo_bloque) == 1){//Los bloques son contiguos
@@ -191,23 +212,27 @@ int fs_truncate(char* ruta, int registro_tamanio){
 			else{
 				printf("No hay espacio contiguo suficiente, debe compactar!!!");
 
-				compactar();
-				metadata = datos_metadata(ruta);
-				ultimo_bloque = cantidad_bloques_actual + metadata->bloque_inicial - 1;
+				compactar(1);
+
+				t_metadata* metadata_compactacion_2 = datos_metadata(ruta);
+				ultimo_bloque = cantidad_bloques_actual + metadata_compactacion_2->bloque_inicial - 1;
 
 					//Como compacto debo buscar todo el nuevo tamano completo
 				if((nuevo_bloque = buscar_bloque_bitmap(cantidad_bloques(nuevo_tamanio))) == -1){
 					printf("No hay espacio en memoria!!! debe esperar que se libere la memoria!!!");
+					free(metadata_compactacion_2);
 					return EXIT_FAILURE;
 				}else{
 					printf("Copiando datos al nuevo lugar\n");
 					asignar_bloque_bitmap(nuevo_bloque, cantidad_bloques(nuevo_tamanio));
 					//Primero copio lo que estaba en los bloques anteriores al inicio del nuevo bloque
-					escribir_datos_bloque(buffer_bloques + inicio_bloque(metadata->bloque_inicial), inicio_bloque(nuevo_bloque), metadata->tamanio_archivo);
+					escribir_datos_bloque(buffer_bloques + inicio_bloque(metadata_compactacion_2->bloque_inicial), inicio_bloque(nuevo_bloque), metadata_compactacion_2->tamanio_archivo);
 					//Ahora limpio el espacio donde estaba el bloque
-					remover_datos_bloque(inicio_bloque(metadata->bloque_inicial), tamanio_anterior);
-					remover_bloque_bitmap(metadata->bloque_inicial, cantidad_bloques_actual);
+					remover_datos_bloque(inicio_bloque(metadata_compactacion_2->bloque_inicial), tamanio_anterior);
+					remover_bloque_bitmap(metadata_compactacion_2->bloque_inicial, cantidad_bloques_actual);
 					modificar_metadata(ruta, nuevo_bloque, nuevo_tamanio);
+
+					free(metadata_compactacion_2);
 				}
 			}
 		}
@@ -228,82 +253,32 @@ int fs_truncate(char* ruta, int registro_tamanio){
 
 int fs_write(char* ruta, int registro_direccion, int registro_tamanio, int registro_puntero){
 	//Pedir a memoria que me devuelva la cantidad de registro_tamanio bytes en registro_direccion
-	char* datos = datos_memoria(registro_direccion, registro_tamanio);
+	char* datos = "Hola Lorena, como estas, espero que bien, quiero que sepas que te sigo amando con locura :(";
 	//Arriba es memoria
 
 	t_metadata* metadata = datos_metadata(ruta);
 
-	int anterior_tamanio = metadata->tamanio_archivo; //para guardar el anterior tamanio
-	int cantidad_anterior_bloques = cantidad_bloques(anterior_tamanio); //Cuantos bloques ocupaba
+	int tamanio_bloques = cantidad_bloques(metadata->tamanio_archivo)*BLOCK_SIZE/8; //Es el peso en bytes de los bloques que ocupa
 
-	//Veo si al escribir todos los datos me voy a pasar del tamanio que tengo
-	if(inicio_bloque(metadata->bloque_inicial)+registro_puntero+registro_tamanio > metadata->tamanio_archivo){
-		metadata->tamanio_archivo = registro_puntero + registro_tamanio;
-	}
+	if(registro_puntero > tamanio_bloques){ //Si el registro_puntero es mas grande que el bloque
+		printf("No se puede escribir en ese sector, pertenece a otro archivo!!!\n");
 
-	int ultimo_bloque = cantidad_anterior_bloques + metadata->bloque_inicial -1; //Es el ultimo bloque (posicion en bitarray)que ocupaba los datos para hacer la cuenta
-
-	int cantidad_extra_bloques = cantidad_bloques(metadata->tamanio_archivo) - cantidad_anterior_bloques;
-
-	if(cantidad_extra_bloques == 0){
-		//quiere decir que los datos entran en los bloques que ya tengo
-		modificar_metadata(ruta, metadata->bloque_inicial, metadata->tamanio_archivo);
-		//Escribo bloque
-		escribir_datos_bloque(datos, inicio_bloque(metadata->bloque_inicial) + registro_puntero, registro_tamanio);
+		free(metadata);
+		return EXIT_FAILURE;
 	}else{
-		int nuevo_bloque;
-		if((nuevo_bloque = buscar_bloque_bitmap(cantidad_anterior_bloques)) == -1){
-			printf("No hay espacio suficiente solicitado, debe compactar!!!");
-
-			compactar();
-			metadata = datos_metadata(ruta);
-			ultimo_bloque = cantidad_anterior_bloques + metadata->bloque_inicial - 1;
-
-			//Como compacto debo buscar todo el nuevo tamanio completo
-			if((nuevo_bloque = buscar_bloque_bitmap(cantidad_bloques(metadata->tamanio_archivo))) == -1){
-				printf("No hay espacio en memoria!!! debe esperar que se libere la memoria!!!");
-				return EXIT_FAILURE;
-			}else{
-				asignar_bloque_bitmap(nuevo_bloque, cantidad_bloques(metadata->tamanio_archivo));
-				//Debo mover lo del bloque anterior al nuevo bloque y luego agregarle los nuevos datos
-				escribir_datos_bloque(buffer_bloques + inicio_bloque(metadata->bloque_inicial), inicio_bloque(nuevo_bloque), anterior_tamanio);
-				escribir_datos_bloque(datos, inicio_bloque(nuevo_bloque) + registro_puntero, registro_tamanio);
-				//limpio el espacio donde me encontraba
-				remover_bloque_bitmap(metadata->bloque_inicial, cantidad_anterior_bloques);
-
-				modificar_metadata(ruta, nuevo_bloque, metadata->tamanio_archivo+registro_puntero+registro_tamanio);
-			}
+		if(registro_puntero + registro_tamanio > tamanio_bloques){ //SI registro_puntero + tamanio se pasan del tamanio de bloques
+			escribir_datos_bloque(datos, inicio_bloque(metadata->bloque_inicial) + registro_puntero, tamanio_bloques - registro_puntero);
+			modificar_metadata(ruta, metadata->bloque_inicial, tamanio_bloques);
 		}else{
-			if((nuevo_bloque - ultimo_bloque) == 1){
-				asignar_bloque_bitmap(nuevo_bloque, cantidad_extra_bloques);
-				//Quiere decir que los bloques son continguos y debo agregarle al archivo los datos
+			if((registro_puntero + registro_tamanio) > metadata->tamanio_archivo){ //Este caso es cuando puntero + tamanio es mas grande que tamanio_archivo
 				escribir_datos_bloque(datos, inicio_bloque(metadata->bloque_inicial) + registro_puntero, registro_tamanio);
-
-				modificar_metadata(ruta, metadata->bloque_inicial, metadata->tamanio_archivo+registro_puntero+registro_tamanio);
-			}
-			else{
-				printf("No hay espacio suficiente, para bloques contiguos\n");
-
-				compactar();
-				metadata = datos_metadata(ruta);
-				ultimo_bloque = cantidad_anterior_bloques + metadata->bloque_inicial - 1;
-
-				//Como compacto debo buscar todo el nuevo tamano completo
-				if((nuevo_bloque = buscar_bloque_bitmap(cantidad_bloques(metadata->tamanio_archivo))) == -1){
-					printf("No hay espacio en memoria!!! debe esperar que se libere la memoria!!!");
-					return EXIT_FAILURE;
-				}else{
-					asignar_bloque_bitmap(nuevo_bloque, cantidad_bloques(metadata->tamanio_archivo) + cantidad_extra_bloques);
-					//Debo mover lo del bloque anterior al nuevo bloque y luego agregarle los nuevos datos
-					escribir_datos_bloque(buffer_bloques + inicio_bloque(metadata->bloque_inicial), inicio_bloque(nuevo_bloque), anterior_tamanio);
-					escribir_datos_bloque(datos, inicio_bloque(nuevo_bloque) + registro_puntero, registro_tamanio);
-					//Debo limpiar el lugar donde estaba antes
-					remover_bloque_bitmap(metadata->bloque_inicial, cantidad_anterior_bloques);
-					modificar_metadata(ruta, nuevo_bloque, metadata->tamanio_archivo+registro_puntero+registro_tamanio);
-				}
+				modificar_metadata(ruta, metadata->bloque_inicial, registro_puntero + registro_tamanio);
+			}else{
+				escribir_datos_bloque(datos, inicio_bloque(metadata->bloque_inicial) + registro_puntero, registro_tamanio);
 			}
 		}
 	}
+
 	free(metadata);
 
 	return EXIT_SUCCESS;
@@ -313,23 +288,23 @@ int fs_read(char* ruta, int registro_direccion, int registro_tamanio, int regist
 	t_metadata* metadata = datos_metadata(ruta);
 
 	if(registro_puntero + registro_tamanio > metadata->tamanio_archivo){
-		printf("No hay suficientes datos para leer, te doy lo que hay XD\n");
 		//Esto es a memoria
 		memcpy(memoria + registro_direccion, buffer_bloques + inicio_bloque(metadata->bloque_inicial) + registro_puntero, abs(metadata->tamanio_archivo - registro_puntero));
 		//
 	}
 	else{
-		printf("ay suficientes datos para leer\n");
 		//Esto es memoria
 		memcpy(memoria + registro_direccion, buffer_bloques + inicio_bloque(metadata->bloque_inicial) + registro_puntero, registro_tamanio);
 	}
+
+	free(metadata);
 
 	return EXIT_SUCCESS;
 }
 
 //Funciones generales para bitmap y bloques
 char* ruta_absoluta(char* ruta_relativa){
-	int tamanio_ruta = strlen(PATH_BASE_DIALFS) + strlen(ruta_relativa);
+	int tamanio_ruta = strlen(PATH_BASE_DIALFS) + strlen(ruta_relativa) + 2;
 	char* ruta = malloc(tamanio_ruta*sizeof(char));
 
 	strcpy(ruta, PATH_BASE_DIALFS);
@@ -340,18 +315,21 @@ char* ruta_absoluta(char* ruta_relativa){
 }
 
 void obtener_datos_filesystem(){
-	obtener_archivo(ARCHIVO_BLOQUE, (void*) crear_bloques, (void*) abrir_bloques);
-	obtener_archivo(ARCHIVO_BITMAP, (void*) crear_bitmap, (void*) abrir_bitmap);
+	obtener_archivo("bloques.dat", (void*) crear_bloques, (void*) abrir_bloques);
+	obtener_archivo("bitmap.dat", (void*) crear_bitmap, (void*) abrir_bitmap);
 	//Memoria
-	obtener_archivo(MEMORIA, (void*) crear_memoria, (void*)abrir_memoria);
+	obtener_archivo("memoria.dat", (void*) crear_memoria, (void*)abrir_memoria);
 }
 
 int obtener_archivo(char* ruta, void (*tipo_creacion)(int), void (*tipo_apertura)(int)){
-	if(access(ruta_absoluta(ruta), F_OK) == -1){
+	char* ruta_archivo = ruta_absoluta(ruta);
+	if(access(ruta_archivo, F_OK) == -1){
 		crear_archivo(ruta, (*tipo_creacion));
 	}else{
 		abrir_archivo(ruta, (*tipo_apertura));
 	}
+
+	free(ruta_archivo);
 
 	return EXIT_SUCCESS;
 }
@@ -359,13 +337,17 @@ int obtener_archivo(char* ruta, void (*tipo_creacion)(int), void (*tipo_apertura
 int crear_archivo(char* ruta, void (*tipo_Archivo)(int)){
 	int fd;
 
-	if((fd = open(ruta_absoluta(ruta), O_CREAT|O_RDWR|O_TRUNC, S_IRWXU)) == -1){
+	char* ruta_archivo = ruta_absoluta(ruta);
+
+	if((fd = open(ruta_archivo, O_CREAT|O_RDWR|O_TRUNC, S_IRWXU)) == -1){
 		printf("No se pudo crear el archivo!!!\n");
 		return EXIT_FAILURE;
 	}else{
 		(*tipo_Archivo)(fd);
 		close(fd);
 	}
+
+	free(ruta_archivo);
 
 	return EXIT_SUCCESS;
 }
@@ -374,13 +356,17 @@ int crear_archivo(char* ruta, void (*tipo_Archivo)(int)){
 int abrir_archivo(char* ruta, void (*tipo_Archivo)(int)){
 	int fd;
 
-	if((fd = open(ruta_absoluta(ruta), O_RDWR)) == -1){
+	char* ruta_archivo = ruta_absoluta(ruta);
+
+	if((fd = open(ruta_archivo, O_RDWR)) == -1){
 		printf("No se pudo abrir el archivo!!!\n");
 		return EXIT_FAILURE;
 	}else{
 		(*tipo_Archivo)(fd);
 		close(fd);
 	}
+
+	free(ruta_archivo);
 
 	return EXIT_SUCCESS;
 }
@@ -525,8 +511,9 @@ int remover_bloque_bitmap(int bloque_inicial, int longitud){
 
 int crear_metadata(char* ruta, int bloque_inicial, int tamanio_archivo){
 	int fd;
+	char* ruta_archivo = ruta_absoluta(ruta);
 
-	if((fd = open(ruta_absoluta(ruta), O_CREAT, S_IRWXU)) == -1){
+	if((fd = open(ruta_archivo, O_CREAT, S_IRWXU)) == -1){
 		perror("No se pudo crear el archivo!!!\n");
 		return EXIT_FAILURE;
 	}else{
@@ -542,6 +529,7 @@ int crear_metadata(char* ruta, int bloque_inicial, int tamanio_archivo){
 
 		free(bloque_string);
 		free(tamanio_string);
+		free(ruta_archivo);
 	}
 
 	return EXIT_SUCCESS;
@@ -564,7 +552,8 @@ int cargar_metadata(char* ruta, t_metadata* metadata){
 }
 
 int modificar_metadata(char* ruta, int bloque_inicial, int tamanio_archivo){
-	t_config* config = config_create(ruta_absoluta(ruta));
+	char* ruta_archivo = ruta_absoluta(ruta);
+	t_config* config = config_create(ruta_archivo);
 
 	char* bloque_string = malloc(50*sizeof(char));
 	char* tamanio_string = malloc(50*sizeof(char));
@@ -576,6 +565,7 @@ int modificar_metadata(char* ruta, int bloque_inicial, int tamanio_archivo){
 	config_set_value(config, "TAMANIO_ARCHIVO", tamanio_string);
 	config_save(config);
 
+	free(ruta_archivo);
 	free(bloque_string);
 	free(tamanio_string);
 	config_destroy(config);
@@ -585,18 +575,21 @@ int modificar_metadata(char* ruta, int bloque_inicial, int tamanio_archivo){
 
 t_metadata* datos_metadata(char* ruta){
 	t_metadata* metadata = malloc(sizeof(t_metadata));
-	t_config* config = config_create(ruta_absoluta(ruta));
+	char* ruta_archivo = ruta_absoluta(ruta);
+	t_config* config = config_create(ruta_archivo);
 
 	metadata->bloque_inicial = config_get_int_value(config, "BLOQUE_INICIAL");
 	metadata->tamanio_archivo = config_get_int_value(config, "TAMANIO_ARCHIVO");
 
+	free(ruta_archivo);
 	config_destroy(config);
+
 	return metadata;
 }
 
 //Proceso de compactacion
 
-int compactar(){
+int compactar(int pid){
 	t_list* lista_archivos = cargar_archivos(PATH_BASE_DIALFS);
 
 	//Aca debe limpiar todo el buffer del bitmap
@@ -616,7 +609,12 @@ int compactar(){
 		contador_posicion += cantidad_bloques(metadata->tamanio_archivo);
 
 		modificar_metadata(metadata->nombre, nuevo_bloque_inicial, metadata->tamanio_archivo);
+
+		free(metadata->nombre);
+		free(metadata);
 	}
+
+	list_destroy(lista_archivos);
 
 	return EXIT_SUCCESS;
 }
@@ -634,7 +632,7 @@ t_list* cargar_archivos(char* ruta_directorio){
 		//Muestra todos los archivos menos bloques.dat y bitmap.dat
 		if(strlen(ent->d_name) > 4 && strcmp(ent->d_name + strlen(ent->d_name)-4,".txt") == 0){
 			t_metadata* metadata = datos_metadata(ent->d_name);
-			metadata->nombre = malloc(strlen(ent->d_name)*sizeof(char));
+			metadata->nombre = malloc(50*sizeof(char));
 			strcpy(metadata->nombre, ent->d_name);
 
 			//Mete todo a una lista pero ordenada segun su bloque inicial
@@ -675,8 +673,9 @@ int abrir_archivos(){
 				printf("0\t");
 			}
 			char* bloque = malloc((BLOCK_SIZE/8)*sizeof(char));
-			strncpy(bloque, buffer_bloques + inicio_bloque(i), BLOCK_SIZE/8);
+			strncpy(bloque, buffer_bloques + inicio_bloque(i), (BLOCK_SIZE/8)+1);
 			printf("%s\n", bloque);
+			free(bloque);
 		}
 
 	return EXIT_SUCCESS;
@@ -714,6 +713,8 @@ char* datos_memoria(int registro_direccion, int registro_tamanio){
 	char* datos = malloc(registro_tamanio*sizeof(char));
 
 	memcpy(datos, memoria + registro_direccion, registro_tamanio);
+
+	free(datos);
 
 	return datos;
 }
